@@ -189,12 +189,18 @@ if input_option == "URL":
 else:
     uploaded_file = st.file_uploader("Upload a document", type=['pdf', 'txt', 'md'])
     if uploaded_file:
-        # Create a temporary file to store the upload
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as tmp_file:
-            tmp_file.write(uploaded_file.getvalue())
-            docs = load_documents(tmp_file.name, is_url=False)
-        # Clean up the temporary file
-        os.unlink(tmp_file.name)
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_path = tmp_file.name
+            docs = load_documents(tmp_path, is_url=False)
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
 # Streamlit re-runs this whole script on every widget interaction (e.g. asking a
 # question), so ingest only when the source actually changes — otherwise every
@@ -249,7 +255,7 @@ def retrieve(state):
     if retriever is None:
         return {"keys": {"documents": [], "question": question}}
         
-    documents = retriever.get_relevant_documents(question)
+    documents = retriever.invoke(question) if hasattr(retriever, "invoke") else retriever.get_relevant_documents(question)
     return {"keys": {"documents": documents, "question": question}}
 
 
@@ -328,7 +334,7 @@ def grade_documents(state):
         try:
             response = chain.invoke({"question": question, "context": d.page_content})
             import re
-            json_match = re.search(r'\{.*\}', response)
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
             if json_match:
                 response = json_match.group()
             
@@ -458,11 +464,17 @@ if user_question:
         }
     }
 
+    last_value = None
     for output in app.stream(inputs):
         for key, value in output.items():
+            last_value = value
             with st.expander(f"Step '{key}':"):
                 st.text(pprint.pformat(format_state(value["keys"]), indent=2, width=80))
 
-    final_generation = value['keys'].get('generation', 'No final generation produced.')
+    final_generation = (
+        last_value["keys"].get("generation", "No final generation produced.")
+        if last_value and "keys" in last_value
+        else "No final generation produced."
+    )
     st.subheader("Final Generation:")
     st.write(final_generation)
