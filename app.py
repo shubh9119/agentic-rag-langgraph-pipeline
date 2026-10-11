@@ -214,7 +214,7 @@ if docs and st.session_state.get("ingested_source") != source_key:
     all_splits = text_splitter.split_documents(docs)
 
     client = QdrantClient(url=st.session_state.qdrant_url, api_key=st.session_state.qdrant_api_key)
-    collection_name = "rag-qdrant"
+    collection_name = "agentic-hybrid-rag-qdrant"
 
     try:
         # Try to delete the collection if it exists
@@ -450,7 +450,7 @@ workflow.add_edge("generate", END)
 
 app = workflow.compile()
 
-st.title("🔄 Corrective RAG Agent")
+st.title("🔄 Stateful Agentic & Corrective Hybrid RAG Pipeline")
 
 st.text("A possible query: What are the experiment results and ablation studies in this research paper?")
 
